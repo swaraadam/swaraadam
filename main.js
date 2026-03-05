@@ -595,6 +595,58 @@ const material = new THREE.ShaderMaterial({
 const particles = new THREE.Points(geometry, material);
 scene.add(particles);
 
+// ─── Depth Layers (far background + near foreground) ───
+function createDepthLayer(count, zOffset, sizeScale, alphaScale, speedScale) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const ph = new Float32Array(count);
+  const sz = new Float32Array(count);
+
+  for (let i = 0; i < count; i++) {
+    const i3 = i * 3;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = Math.pow(Math.random(), 0.4) * FIELD_SIZE * 1.5;
+    pos[i3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    pos[i3 + 2] = r * Math.cos(phi) + zOffset;
+    ph[i] = Math.random();
+    sz[i] = (Math.random() * 1.5 + 0.3) * sizeScale;
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aVelocity', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+  geo.setAttribute('aPhase', new THREE.BufferAttribute(ph, 1));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    vertexShader,
+    fragmentShader,
+    uniforms: {
+      uTime: { value: 0 },
+      uMouse: { value: new THREE.Vector2(0, 0) },
+      uMouseActive: { value: 0 },
+      uReveal: { value: 0 },
+      uRippleOrigin: { value: new THREE.Vector2(0, 0) },
+      uRippleAge: { value: 10 },
+      uWarmColor: { value: timeColors.warm.clone().multiplyScalar(alphaScale) },
+      uCoolColor: { value: timeColors.cool.clone().multiplyScalar(alphaScale) },
+      uGlowColor: { value: timeColors.glow.clone().multiplyScalar(alphaScale) },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+
+  const pts = new THREE.Points(geo, mat);
+  scene.add(pts);
+  return { geometry: geo, material: mat, speedScale };
+}
+
+const farLayer = createDepthLayer(3000, -6, 0.5, 0.5, 0.4);
+const nearLayer = createDepthLayer(1500, 3, 0.7, 0.6, 1.4);
+const depthLayers = [farLayer, nearLayer];
+
 // ─── Constellation Threads ───
 const CONSTELLATION_SAMPLE = 150;
 const MAX_LINES = 200;
@@ -773,6 +825,16 @@ function animate() {
   const now = performance.now() / 1000;
   material.uniforms.uRippleAge.value = now - rippleTime;
   material.uniforms.uRippleOrigin.value.copy(rippleOrigin);
+
+  // Update depth layers
+  for (const layer of depthLayers) {
+    layer.material.uniforms.uTime.value = elapsed * layer.speedScale;
+    layer.material.uniforms.uMouse.value.copy(mouseSmooth);
+    layer.material.uniforms.uMouseActive.value = material.uniforms.uMouseActive.value * 0.3;
+    layer.material.uniforms.uReveal.value = material.uniforms.uReveal.value;
+    layer.material.uniforms.uRippleAge.value = now - rippleTime;
+    layer.material.uniforms.uRippleOrigin.value.copy(rippleOrigin);
+  }
 
   // Camera: base sway + parallax from mouse/gyro
   const swayX = Math.sin(elapsed * 0.1) * 0.3;
