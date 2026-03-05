@@ -145,8 +145,6 @@ let revealed = false;
 let moveCount = 0;
 let hideTimer = null;
 let hintShown = false;
-let verseShown = false;
-
 function revealContent() {
   if (revealed) return;
   revealed = true;
@@ -156,22 +154,36 @@ function revealContent() {
   // Start ambient sound on first reveal
   initAudio();
 
-  if (!verseShown) {
-    // First time: ghostly Arabic glimpse, then English
-    verseShown = true;
-    // Brief glimpse of Arabic - barely visible, blurred
-    verse.classList.add('glimpse');
-    setTimeout(() => {
-      verse.classList.remove('glimpse');
-      verse.classList.add('vanish');
-    }, 1000);
-    setTimeout(() => {
-      content.classList.add('revealed');
-    }, 1100);
-  } else {
-    content.classList.add('revealed');
-  }
+  // English tagline appears immediately — no waiting
+  content.classList.add('revealed');
 }
+
+// Verse arrives on its own — hidayah chooses you
+function sendVerse() {
+  verse.classList.remove('glimpse', 'vanish');
+  // Force reflow so classes re-trigger
+  void verse.offsetWidth;
+  verse.classList.add('glimpse');
+  setTimeout(() => {
+    verse.classList.remove('glimpse');
+    verse.classList.add('vanish');
+  }, 1200);
+
+  // Rotate to next verse for the next appearance
+  const nextIdx = (parseInt(localStorage.getItem(visitKey) || '0', 10) + 1) % verses.length;
+  localStorage.setItem(visitKey, String(nextIdx));
+  setTimeout(() => {
+    verse.textContent = verses[nextIdx];
+    verse.classList.remove('vanish');
+  }, 2800);
+}
+
+// First verse comes after a quiet moment — unbidden
+setTimeout(sendVerse, 4000 + Math.random() * 3000);
+// Then periodically, like waves of guidance
+setInterval(() => {
+  sendVerse();
+}, 18000 + Math.random() * 10000);
 
 function hideContent() {
   if (!revealed) return;
