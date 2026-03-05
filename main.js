@@ -63,20 +63,37 @@ let mouseActive = false;
 
 const content = document.getElementById('content');
 const hint = document.getElementById('hint');
+const verse = document.getElementById('verse');
 let revealed = false;
 let moveCount = 0;
 let hideTimer = null;
 let hintShown = false;
+let verseShown = false;
 
 function revealContent() {
   if (revealed) return;
   revealed = true;
-  content.classList.add('revealed');
   hint.classList.remove('visible');
   hint.classList.add('hidden');
 
   // Start ambient sound on first reveal
   initAudio();
+
+  if (!verseShown) {
+    // First time: ghostly Arabic glimpse, then English
+    verseShown = true;
+    // Brief glimpse of Arabic - barely visible
+    verse.classList.add('glimpse');
+    setTimeout(() => {
+      verse.classList.remove('glimpse');
+      verse.classList.add('vanish');
+    }, 1000);
+    setTimeout(() => {
+      content.classList.add('revealed');
+    }, 1100);
+  } else {
+    content.classList.add('revealed');
+  }
 }
 
 function hideContent() {
