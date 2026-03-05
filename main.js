@@ -748,3 +748,50 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// ─── Dynamic Favicon ───
+(() => {
+  const size = 32;
+  const fav = document.createElement('canvas');
+  fav.width = size;
+  fav.height = size;
+  const fctx = fav.getContext('2d');
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  document.head.appendChild(link);
+
+  const w = timeColors.warm;
+  const warmRGB = `${Math.round(w.x * 255)}, ${Math.round(w.y * 255)}, ${Math.round(w.z * 255)}`;
+
+  function updateFavicon() {
+    const t = performance.now() / 1000;
+    fctx.clearRect(0, 0, size, size);
+
+    // Pulsing central glow
+    const pulse = 0.6 + Math.sin(t * 0.8) * 0.15;
+    const grad = fctx.createRadialGradient(16, 16, 0, 16, 16, 14);
+    grad.addColorStop(0, `rgba(${warmRGB}, ${pulse})`);
+    grad.addColorStop(0.5, `rgba(${warmRGB}, ${pulse * 0.3})`);
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    fctx.fillStyle = grad;
+    fctx.fillRect(0, 0, size, size);
+
+    // A few orbiting dots
+    for (let i = 0; i < 5; i++) {
+      const angle = t * 0.4 + i * 1.256;
+      const r = 6 + Math.sin(t * 0.3 + i * 2) * 3;
+      const x = 16 + Math.cos(angle) * r;
+      const y = 16 + Math.sin(angle) * r;
+      const a = 0.4 + Math.sin(t + i * 1.5) * 0.2;
+      fctx.beginPath();
+      fctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      fctx.fillStyle = `rgba(${warmRGB}, ${a})`;
+      fctx.fill();
+    }
+
+    link.href = fav.toDataURL('image/png');
+  }
+
+  setInterval(updateFavicon, 200);
+  updateFavicon();
+})();
