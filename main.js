@@ -19,22 +19,70 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.z = 5;
 
-// ─── Mouse tracking ───
+// ─── Mouse tracking & reveal state ───
 const mouse = new THREE.Vector2(0, 0);
 const mouseSmooth = new THREE.Vector2(0, 0);
 let mouseActive = false;
+
+const content = document.getElementById('content');
+const hint = document.getElementById('hint');
+let revealed = false;
+let moveCount = 0;
+let hideTimer = null;
+let hintShown = false;
+
+function revealContent() {
+  if (revealed) return;
+  revealed = true;
+  content.classList.add('revealed');
+  hint.classList.remove('visible');
+  hint.classList.add('hidden');
+}
+
+function hideContent() {
+  if (!revealed) return;
+  revealed = false;
+  content.classList.remove('revealed');
+}
+
+function resetHideTimer() {
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(hideContent, 4000);
+}
+
+// Show hint after 3s of inactivity
+setTimeout(() => {
+  if (!revealed && !hintShown) {
+    hint.classList.add('visible');
+    hintShown = true;
+  }
+}, 3000);
 
 window.addEventListener('mousemove', (e) => {
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
   mouseActive = true;
+
+  moveCount++;
+  if (moveCount > 15 && !revealed) {
+    revealContent();
+  }
+  if (revealed) resetHideTimer();
 });
+
+window.addEventListener('touchstart', () => {
+  if (!revealed) {
+    revealContent();
+    resetHideTimer();
+  }
+}, { passive: true });
 
 window.addEventListener('touchmove', (e) => {
   const touch = e.touches[0];
   mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
   mouseActive = true;
+  if (revealed) resetHideTimer();
 }, { passive: true });
 
 // ─── Vertex Shader ───
@@ -42,6 +90,7 @@ const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform vec2 uMouse;
   uniform float uMouseActive;
+  uniform float uReveal;
 
   attribute vec3 aVelocity;
   attribute float aPhase;
@@ -144,6 +193,13 @@ const vertexShader = /* glsl */ `
     pos.xy += normalize(perpendicular + 0.001) * mouseInfluence * 0.4;
     pos.xy += normalize(toMouse.xy + 0.001) * mouseInfluence * 0.15;
 
+    // Push particles away from center when text is revealed
+    float centerDist = length(pos.xy);
+    float clearRadius = 3.5 * uReveal;
+    float pushStrength = smoothstep(clearRadius, clearRadius * 0.05, centerDist) * uReveal;
+    vec2 pushDir = normalize(pos.xy + 0.001);
+    pos.xy += pushDir * pushStrength * 3.5;
+
     // Orbital motion
     float angle = uTime * 0.08 * (0.5 + aPhase * 0.5);
     float cosA = cos(angle);
@@ -152,6 +208,8 @@ const vertexShader = /* glsl */ `
 
     vDistance = length(pos.xy);
     vAlpha = smoothstep(6.0, 0.0, vDistance) * (0.4 + breathe * 0.6);
+    // Fully clear particles in center zone when revealed
+    vAlpha *= 1.0 - smoothstep(clearRadius * 1.2, 0.0, vDistance) * uReveal;
 
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
@@ -225,6 +283,7 @@ const material = new THREE.ShaderMaterial({
     uTime: { value: 0 },
     uMouse: { value: new THREE.Vector2(0, 0) },
     uMouseActive: { value: 0 },
+    uReveal: { value: 0 },
   },
   transparent: true,
   depthWrite: false,
@@ -286,6 +345,8 @@ function animate() {
   material.uniforms.uTime.value = elapsed;
   material.uniforms.uMouse.value.copy(mouseSmooth);
   material.uniforms.uMouseActive.value += ((mouseActive ? 1 : 0) - material.uniforms.uMouseActive.value) * 0.02;
+  const targetReveal = revealed ? 1 : 0;
+  material.uniforms.uReveal.value += (targetReveal - material.uniforms.uReveal.value) * 0.03;
   glowMaterial.uniforms.uTime.value = elapsed;
 
   // Gentle camera sway

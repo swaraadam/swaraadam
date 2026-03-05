@@ -49,59 +49,147 @@ html, body {
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.92);
   opacity: 0;
-  transform: translateY(20px);
-  animation: fadeUp 2s ease-out 1.5s forwards;
+  transform: translateY(12px) scale(0.97);
+  transition: opacity 1.2s cubic-bezier(0.25, 0, 0, 1),
+              transform 1.2s cubic-bezier(0.25, 0, 0, 1);
   text-shadow: 0 0 40px rgba(255, 255, 255, 0.15);
+}
+
+.revealed .tagline {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .cta {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-top: 2.5rem;
-  padding: 14px 32px;
+  padding: 16px 40px;
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(0.9rem, 1.5vw, 1.15rem);
   font-weight: 400;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0);
   text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0);
   border-radius: 0;
   background: transparent;
   opacity: 0;
-  transform: translateY(20px);
-  animation: fadeUp 2s ease-out 2.5s forwards;
-  transition: all 0.5s cubic-bezier(0.25, 0, 0, 1);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  transform: translateY(16px);
+  transition: opacity 1s cubic-bezier(0.25, 0, 0, 1) 0.3s,
+              transform 1s cubic-bezier(0.25, 0, 0, 1) 0.3s,
+              color 0.5s ease,
+              border-color 0.5s ease,
+              background 0.5s ease,
+              box-shadow 0.5s ease;
+  pointer-events: none;
+  position: relative;
+}
+
+.revealed .cta {
+  opacity: 1;
+  transform: translateY(0);
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.2);
+  pointer-events: auto;
+  animation: ctaPulse 3s ease-in-out 1.5s infinite;
+}
+
+.cta::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(135deg,
+    rgba(255, 220, 150, 0.15),
+    rgba(255, 255, 255, 0.05),
+    rgba(180, 200, 255, 0.15));
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  z-index: -1;
+}
+
+.cta::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  background: radial-gradient(ellipse at center,
+    rgba(255, 230, 180, 0.08) 0%,
+    transparent 70%);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  z-index: -2;
 }
 
 .cta:hover {
   color: rgba(255, 255, 255, 1);
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow: 0 0 30px rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 220, 150, 0.5);
+  background: rgba(255, 235, 180, 0.06);
+  box-shadow:
+    0 0 20px rgba(255, 220, 150, 0.1),
+    0 0 60px rgba(255, 220, 150, 0.05),
+    inset 0 0 20px rgba(255, 220, 150, 0.03);
+  animation: none;
+}
+
+.cta:hover::before {
+  opacity: 1;
+}
+
+.cta:hover::after {
+  opacity: 1;
 }
 
 .cta:hover .cta-arrow {
-  transform: translateX(4px);
+  transform: translateX(6px);
 }
 
 .cta-arrow {
   transition: transform 0.4s cubic-bezier(0.25, 0, 0, 1);
 }
 
-@keyframes fadeUp {
-  to {
-    opacity: 1;
-    transform: translateY(0);
+.hint {
+  position: fixed;
+  bottom: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0);
+  z-index: 2;
+  transition: color 2s ease;
+  pointer-events: none;
+}
+
+.hint.visible {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.hint.hidden {
+  color: rgba(255, 255, 255, 0);
+}
+
+@keyframes ctaPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(255, 220, 150, 0),
+                0 0 40px rgba(255, 220, 150, 0);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(255, 220, 150, 0.08),
+                0 0 40px rgba(255, 220, 150, 0.04);
+    border-color: rgba(255, 220, 150, 0.35);
   }
 }
 
 @media (max-width: 600px) {
   .cta {
-    padding: 12px 24px;
+    padding: 14px 28px;
+  }
+
+  .hint {
+    bottom: 1.5rem;
   }
 }
