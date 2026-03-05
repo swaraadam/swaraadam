@@ -291,12 +291,33 @@ window.addEventListener('touchmove', (e) => {
   if (revealed) resetHideTimer();
 }, { passive: true });
 
+// ─── Click/Tap Ripple ───
+let rippleTime = -10; // time of last ripple (negative = no active ripple)
+const rippleOrigin = new THREE.Vector2(0, 0);
+
+window.addEventListener('click', (e) => {
+  rippleOrigin.x = (e.clientX / window.innerWidth) * 2 - 1;
+  rippleOrigin.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  rippleTime = performance.now() / 1000;
+});
+
+window.addEventListener('touchstart', (e) => {
+  if (e.touches.length > 0) {
+    const t = e.touches[0];
+    rippleOrigin.x = (t.clientX / window.innerWidth) * 2 - 1;
+    rippleOrigin.y = -(t.clientY / window.innerHeight) * 2 + 1;
+    rippleTime = performance.now() / 1000;
+  }
+}, { passive: true });
+
 // ─── Vertex Shader ───
 const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform vec2 uMouse;
   uniform float uMouseActive;
   uniform float uReveal;
+  uniform vec2 uRippleOrigin;
+  uniform float uRippleAge;
 
   attribute vec3 aVelocity;
   attribute float aPhase;
@@ -406,6 +427,18 @@ const vertexShader = /* glsl */ `
     vec2 pushDir = normalize(pos.xy + 0.001);
     pos.xy += pushDir * pushStrength * 3.5;
 
+    // Ripple wave from click/tap — gentle, like a breath
+    if (uRippleAge < 6.0) {
+      vec3 rippleWorld = vec3(uRippleOrigin * 3.0, 0.0);
+      float rippleDist = length(pos.xy - rippleWorld.xy);
+      float rippleRadius = uRippleAge * 1.8;
+      float rippleWidth = 3.0;
+      float rippleWave = exp(-pow(rippleDist - rippleRadius, 2.0) / rippleWidth);
+      float rippleFade = exp(-uRippleAge * 0.4);
+      vec2 rippleDir = normalize(pos.xy - rippleWorld.xy + 0.001);
+      pos.xy += rippleDir * rippleWave * rippleFade * 0.6;
+    }
+
     // Orbital motion
     float angle = uTime * 0.08 * (0.5 + aPhase * 0.5);
     float cosA = cos(angle);
@@ -491,6 +524,8 @@ const material = new THREE.ShaderMaterial({
     uMouse: { value: new THREE.Vector2(0, 0) },
     uMouseActive: { value: 0 },
     uReveal: { value: 0 },
+    uRippleOrigin: { value: new THREE.Vector2(0, 0) },
+    uRippleAge: { value: 10 },
     uWarmColor: { value: timeColors.warm },
     uCoolColor: { value: timeColors.cool },
     uGlowColor: { value: timeColors.glow },
@@ -676,6 +711,11 @@ function animate() {
   material.uniforms.uReveal.value += (targetReveal - material.uniforms.uReveal.value) * 0.03;
   glowMaterial.uniforms.uTime.value = elapsed;
   trailMaterial.uniforms.uTime.value = elapsed;
+
+  // Update ripple
+  const now = performance.now() / 1000;
+  material.uniforms.uRippleAge.value = now - rippleTime;
+  material.uniforms.uRippleOrigin.value.copy(rippleOrigin);
 
   // Camera: base sway + parallax from mouse/gyro
   const swayX = Math.sin(elapsed * 0.1) * 0.3;
