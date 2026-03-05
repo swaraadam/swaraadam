@@ -4,6 +4,43 @@ import * as THREE from 'three';
 const PARTICLE_COUNT = 12000;
 const FIELD_SIZE = 8;
 
+// ─── Time-of-day color palette ───
+function getTimeColors() {
+  const hour = new Date().getHours();
+  // 5-8 dawn, 8-16 day, 16-19 dusk, 19-5 night
+  if (hour >= 5 && hour < 8) {
+    // Dawn - warm amber/rose
+    return {
+      warm: new THREE.Vector3(1.0, 0.78, 0.55),
+      cool: new THREE.Vector3(0.85, 0.6, 0.75),
+      glow: new THREE.Vector3(1.0, 0.85, 0.65),
+    };
+  } else if (hour >= 8 && hour < 16) {
+    // Day - bright white-gold
+    return {
+      warm: new THREE.Vector3(1.0, 0.92, 0.75),
+      cool: new THREE.Vector3(0.7, 0.82, 1.0),
+      glow: new THREE.Vector3(1.0, 0.95, 0.88),
+    };
+  } else if (hour >= 16 && hour < 19) {
+    // Dusk - deep amber/purple
+    return {
+      warm: new THREE.Vector3(1.0, 0.75, 0.5),
+      cool: new THREE.Vector3(0.6, 0.5, 0.85),
+      glow: new THREE.Vector3(1.0, 0.8, 0.6),
+    };
+  } else {
+    // Night - deep blue/violet
+    return {
+      warm: new THREE.Vector3(0.7, 0.75, 1.0),
+      cool: new THREE.Vector3(0.4, 0.45, 0.8),
+      glow: new THREE.Vector3(0.75, 0.8, 1.0),
+    };
+  }
+}
+
+const timeColors = getTimeColors();
+
 // ─── Setup ───
 const canvas = document.getElementById('canvas');
 const renderer = new THREE.WebGLRenderer({
@@ -217,9 +254,12 @@ const vertexShader = /* glsl */ `
   }
 `;
 
-// ─── Fragment Shader ───
+// ─── Fragment Shader (with time-of-day colors) ───
 const fragmentShader = /* glsl */ `
   uniform float uTime;
+  uniform vec3 uWarmColor;
+  uniform vec3 uCoolColor;
+  uniform vec3 uGlowColor;
 
   varying float vAlpha;
   varying float vDistance;
@@ -230,15 +270,13 @@ const fragmentShader = /* glsl */ `
     float dist = length(center);
     float alpha = smoothstep(0.5, 0.1, dist);
 
-    // Color gradient: warm gold near center, cool blue-white at edges
-    vec3 warmColor = vec3(1.0, 0.92, 0.75);   // warm gold/light
-    vec3 coolColor = vec3(0.7, 0.82, 1.0);     // cool blue-white
+    // Color gradient: warm near center, cool at edges
     float colorMix = smoothstep(0.0, 4.0, vDistance);
-    vec3 color = mix(warmColor, coolColor, colorMix);
+    vec3 color = mix(uWarmColor, uCoolColor, colorMix);
 
     // Central glow
     float centerGlow = exp(-vDistance * 0.6) * 0.3;
-    color += vec3(1.0, 0.95, 0.85) * centerGlow;
+    color += uGlowColor * centerGlow;
 
     gl_FragColor = vec4(color, alpha * vAlpha * 0.7);
   }
@@ -284,6 +322,9 @@ const material = new THREE.ShaderMaterial({
     uMouse: { value: new THREE.Vector2(0, 0) },
     uMouseActive: { value: 0 },
     uReveal: { value: 0 },
+    uWarmColor: { value: timeColors.warm },
+    uCoolColor: { value: timeColors.cool },
+    uGlowColor: { value: timeColors.glow },
   },
   transparent: true,
   depthWrite: false,
@@ -305,6 +346,7 @@ const glowMaterial = new THREE.ShaderMaterial({
   `,
   fragmentShader: /* glsl */ `
     uniform float uTime;
+    uniform vec3 uGlowColor;
     varying vec2 vUv;
     void main() {
       vec2 center = vUv - 0.5;
@@ -314,12 +356,13 @@ const glowMaterial = new THREE.ShaderMaterial({
       float pulse = sin(uTime * 0.5) * 0.02 + 1.0;
       glow *= pulse;
 
-      vec3 color = vec3(1.0, 0.95, 0.88) * glow;
+      vec3 color = uGlowColor * glow;
       gl_FragColor = vec4(color, glow);
     }
   `,
   uniforms: {
     uTime: { value: 0 },
+    uGlowColor: { value: timeColors.glow },
   },
   transparent: true,
   depthWrite: false,
