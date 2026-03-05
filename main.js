@@ -5,39 +5,96 @@ const PARTICLE_COUNT = 12000;
 const FIELD_SIZE = 8;
 const TRAIL_LENGTH = 80;
 
+// ─── Islamic Calendar Detection ───
+function getHijriMonth() {
+  // Approximate Hijri date using the Umm al-Qura algorithm approximation
+  // Returns { month, day } where month 1=Muharram ... 9=Ramadan, 10=Shawwal, 12=Dhul Hijjah
+  const d = new Date();
+  const gregorianDayNum = Math.floor(d.getTime() / 86400000) + 2440588;
+  const l = gregorianDayNum - 1948440 + 10632;
+  const n = Math.floor((l - 1) / 10631);
+  const remaining = l - 10631 * n + 354;
+  const j = Math.floor((10985 - remaining) / 5316) *
+    Math.floor((50 * remaining) / 17719) +
+    Math.floor(remaining / 5670) *
+    Math.floor((43 * remaining) / 15238);
+  const remAfterJ = remaining - Math.floor((30 - j) / 15) *
+    Math.floor((17719 * j) / 50) -
+    Math.floor(j / 16) * Math.floor((15238 * j) / 43) + 29;
+  const month = Math.floor((24 * remAfterJ) / 709);
+  const day = remAfterJ - Math.floor((709 * month) / 24);
+  return { month, day };
+}
+
+function getIslamicSeason() {
+  const { month, day } = getHijriMonth();
+  // Ramadan (month 9)
+  if (month === 9) return 'ramadan';
+  // Eid al-Fitr (Shawwal 1-3)
+  if (month === 10 && day <= 3) return 'eid-fitr';
+  // Eid al-Adha (Dhul Hijjah 10-13)
+  if (month === 12 && day >= 10 && day <= 13) return 'eid-adha';
+  // Mawlid (Rabi al-Awwal 12)
+  if (month === 3 && day >= 11 && day <= 13) return 'mawlid';
+  return null;
+}
+
 // ─── Time-of-day color palette ───
 function getTimeColors() {
   const hour = new Date().getHours();
+  let colors;
+
   // 5-8 dawn, 8-16 day, 16-19 dusk, 19-5 night
   if (hour >= 5 && hour < 8) {
     // Dawn - warm amber/rose
-    return {
+    colors = {
       warm: new THREE.Vector3(1.0, 0.78, 0.55),
       cool: new THREE.Vector3(0.85, 0.6, 0.75),
       glow: new THREE.Vector3(1.0, 0.85, 0.65),
     };
   } else if (hour >= 8 && hour < 16) {
     // Day - bright white-gold
-    return {
+    colors = {
       warm: new THREE.Vector3(1.0, 0.92, 0.75),
       cool: new THREE.Vector3(0.7, 0.82, 1.0),
       glow: new THREE.Vector3(1.0, 0.95, 0.88),
     };
   } else if (hour >= 16 && hour < 19) {
     // Dusk - deep amber/purple
-    return {
+    colors = {
       warm: new THREE.Vector3(1.0, 0.75, 0.5),
       cool: new THREE.Vector3(0.6, 0.5, 0.85),
       glow: new THREE.Vector3(1.0, 0.8, 0.6),
     };
   } else {
     // Night - deep blue/violet
-    return {
+    colors = {
       warm: new THREE.Vector3(0.7, 0.75, 1.0),
       cool: new THREE.Vector3(0.4, 0.45, 0.8),
       glow: new THREE.Vector3(0.75, 0.8, 1.0),
     };
   }
+
+  // Islamic calendar color overlay — blend with time-of-day base
+  const season = getIslamicSeason();
+  if (season === 'ramadan') {
+    // Deep sacred gold — the month of revelation
+    colors.warm.lerp(new THREE.Vector3(1.0, 0.85, 0.4), 0.4);
+    colors.cool.lerp(new THREE.Vector3(0.3, 0.25, 0.6), 0.3);
+    colors.glow.lerp(new THREE.Vector3(1.0, 0.9, 0.5), 0.5);
+  } else if (season === 'eid-fitr' || season === 'eid-adha') {
+    // Joyful emerald green and gold — celebration
+    colors.warm.lerp(new THREE.Vector3(0.7, 1.0, 0.6), 0.35);
+    colors.cool.lerp(new THREE.Vector3(0.3, 0.8, 0.5), 0.3);
+    colors.glow.lerp(new THREE.Vector3(0.8, 1.0, 0.7), 0.4);
+  } else if (season === 'mawlid') {
+    // Soft green and white — birth of the Prophet
+    colors.warm.lerp(new THREE.Vector3(0.6, 0.95, 0.7), 0.3);
+    colors.cool.lerp(new THREE.Vector3(0.5, 0.85, 0.65), 0.25);
+    colors.glow.lerp(new THREE.Vector3(0.7, 1.0, 0.8), 0.35);
+  }
+
+  return colors;
 }
 
 const timeColors = getTimeColors();
