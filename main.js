@@ -122,6 +122,25 @@ let mouseActive = false;
 const content = document.getElementById('content');
 const hint = document.getElementById('hint');
 const verse = document.getElementById('verse');
+
+// ─── Multi-verse rotation ───
+const verses = [
+  'ذَٰلِكَ الْكِتَابُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ',           // Al-Baqarah 2:2
+  'إِنَّ مَعَ الْعُسْرِ يُسْرًا',                                               // Ash-Sharh 94:6
+  'وَنَحْنُ أَقْرَبُ إِلَيْهِ مِنْ حَبْلِ الْوَرِيدِ',                           // Qaf 50:16
+  'فَاذْكُرُونِي أَذْكُرْكُمْ',                                                 // Al-Baqarah 2:152
+  'وَمَا خَلَقْتُ الْجِنَّ وَالْإِنسَ إِلَّا لِيَعْبُدُونِ',                     // Adh-Dhariyat 51:56
+  'أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ',                               // Ar-Ra'd 13:28
+  'وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ',                           // Al-Baqarah 2:186
+];
+
+// Rotate verse on each visit
+const visitKey = 'swaraadam_verse_idx';
+const lastIdx = parseInt(localStorage.getItem(visitKey) || '0', 10);
+const currentVerseIdx = (lastIdx + 1) % verses.length;
+localStorage.setItem(visitKey, String(currentVerseIdx));
+verse.textContent = verses[currentVerseIdx];
+
 let revealed = false;
 let moveCount = 0;
 let hideTimer = null;
