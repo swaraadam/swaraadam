@@ -503,6 +503,116 @@ const material = new THREE.ShaderMaterial({
 const particles = new THREE.Points(geometry, material);
 scene.add(particles);
 
+// ─── Constellation Threads ───
+const CONSTELLATION_SAMPLE = 150;
+const MAX_LINES = 200;
+const THREAD_DIST = 1.2;
+
+// Sample a fixed subset of particle indices
+const constellationIndices = [];
+const step = Math.floor(PARTICLE_COUNT / CONSTELLATION_SAMPLE);
+for (let i = 0; i < CONSTELLATION_SAMPLE; i++) {
+  constellationIndices.push(i * step);
+}
+
+const linePositions = new Float32Array(MAX_LINES * 6); // 2 vertices per line, 3 coords each
+const lineAlphas = new Float32Array(MAX_LINES * 2);
+const lineGeometry = new THREE.BufferGeometry();
+lineGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+lineGeometry.setAttribute('alpha', new THREE.BufferAttribute(lineAlphas, 1));
+
+const lineMaterial = new THREE.ShaderMaterial({
+  vertexShader: /* glsl */ `
+    attribute float alpha;
+    varying float vAlpha;
+    void main() {
+      vAlpha = alpha;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uLineColor;
+    varying float vAlpha;
+    void main() {
+      gl_FragColor = vec4(uLineColor, vAlpha);
+    }
+  `,
+  uniforms: {
+    uLineColor: { value: timeColors.warm },
+  },
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+
+const constellationLines = new THREE.LineSegments(lineGeometry, lineMaterial);
+scene.add(constellationLines);
+
+// Approximate particle world position on CPU (simplified version of shader logic)
+const _approxPos = new THREE.Vector3();
+function approxParticlePos(idx, time) {
+  const i3 = idx * 3;
+  const px = positions[i3], py = positions[i3 + 1], pz = positions[i3 + 2];
+  const phase = phases[idx];
+  const t = time * 0.15;
+
+  // Simplified noise approximation using sin/cos
+  const nx = Math.sin(px * 0.6 + t + phase * 6.28) * 0.8;
+  const ny = Math.sin(py * 0.6 + t + phase * 4.4) * 0.8;
+  const nz = Math.sin(pz * 0.6 + t + phase * 8.2) * 0.8;
+
+  let x = px + nx, y = py + ny, z = pz + nz;
+
+  // Orbital rotation
+  const angle = time * 0.08 * (0.5 + phase * 0.5);
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+  const rx = x * cosA - z * sinA;
+  const rz = x * sinA + z * cosA;
+
+  _approxPos.set(rx, y, rz);
+  return _approxPos;
+}
+
+function updateConstellations(time) {
+  let lineCount = 0;
+
+  for (let i = 0; i < CONSTELLATION_SAMPLE && lineCount < MAX_LINES; i++) {
+    const a = approxParticlePos(constellationIndices[i], time);
+    const ax = a.x, ay = a.y, az = a.z;
+
+    for (let j = i + 1; j < CONSTELLATION_SAMPLE && lineCount < MAX_LINES; j++) {
+      const b = approxParticlePos(constellationIndices[j], time);
+      const dx = ax - b.x, dy = ay - b.y, dz = az - b.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      if (dist < THREAD_DIST) {
+        const idx = lineCount * 6;
+        linePositions[idx] = ax;
+        linePositions[idx + 1] = ay;
+        linePositions[idx + 2] = az;
+        linePositions[idx + 3] = b.x;
+        linePositions[idx + 4] = b.y;
+        linePositions[idx + 5] = b.z;
+
+        const fade = 1.0 - dist / THREAD_DIST;
+        const aidx = lineCount * 2;
+        lineAlphas[aidx] = fade * 0.12;
+        lineAlphas[aidx + 1] = fade * 0.12;
+
+        lineCount++;
+      }
+    }
+  }
+
+  // Zero out remaining lines
+  for (let i = lineCount * 6; i < MAX_LINES * 6; i++) linePositions[i] = 0;
+  for (let i = lineCount * 2; i < MAX_LINES * 2; i++) lineAlphas[i] = 0;
+
+  lineGeometry.attributes.position.needsUpdate = true;
+  lineGeometry.attributes.alpha.needsUpdate = true;
+  lineGeometry.setDrawRange(0, lineCount * 2);
+}
+
 // ─── Central glow (the "truth" at the center) ───
 const glowGeometry = new THREE.PlaneGeometry(6, 6);
 const glowMaterial = new THREE.ShaderMaterial({
@@ -554,8 +664,9 @@ function animate() {
   mouseSmooth.x += (mouse.x - mouseSmooth.x) * 0.05;
   mouseSmooth.y += (mouse.y - mouseSmooth.y) * 0.05;
 
-  // Update trail
+  // Update trail and constellations
   updateTrail();
+  updateConstellations(elapsed);
 
   // Update uniforms
   material.uniforms.uTime.value = elapsed;
