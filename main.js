@@ -74,6 +74,9 @@ function revealContent() {
   content.classList.add('revealed');
   hint.classList.remove('visible');
   hint.classList.add('hidden');
+
+  // Start ambient sound on first reveal
+  initAudio();
 }
 
 function hideContent() {
@@ -94,6 +97,68 @@ setTimeout(() => {
     hintShown = true;
   }
 }, 3000);
+
+// ─── Ambient Sound Design (Web Audio API) ───
+let audioStarted = false;
+
+function initAudio() {
+  if (audioStarted) return;
+  audioStarted = true;
+
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(0, ctx.currentTime);
+  master.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 4);
+  master.connect(ctx.destination);
+
+  // Deep fundamental drone
+  const drone1 = ctx.createOscillator();
+  drone1.type = 'sine';
+  drone1.frequency.value = 55; // A1
+  const drone1Gain = ctx.createGain();
+  drone1Gain.gain.value = 0.4;
+  drone1.connect(drone1Gain).connect(master);
+  drone1.start();
+
+  // Slightly detuned second voice
+  const drone2 = ctx.createOscillator();
+  drone2.type = 'sine';
+  drone2.frequency.value = 55.3;
+  const drone2Gain = ctx.createGain();
+  drone2Gain.gain.value = 0.3;
+  drone2.connect(drone2Gain).connect(master);
+  drone2.start();
+
+  // Fifth harmonic - ethereal
+  const drone3 = ctx.createOscillator();
+  drone3.type = 'sine';
+  drone3.frequency.value = 82.4; // E2 (perfect fifth)
+  const drone3Gain = ctx.createGain();
+  drone3Gain.gain.value = 0.15;
+  drone3.connect(drone3Gain).connect(master);
+  drone3.start();
+
+  // High shimmer
+  const shimmer = ctx.createOscillator();
+  shimmer.type = 'sine';
+  shimmer.frequency.value = 220;
+  const shimmerGain = ctx.createGain();
+  shimmerGain.gain.value = 0.03;
+  const shimmerFilter = ctx.createBiquadFilter();
+  shimmerFilter.type = 'lowpass';
+  shimmerFilter.frequency.value = 300;
+  shimmer.connect(shimmerFilter).connect(shimmerGain).connect(master);
+  shimmer.start();
+
+  // Slow LFO modulating shimmer volume for breathing
+  const lfo = ctx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.08;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 0.015;
+  lfo.connect(lfoGain).connect(shimmerGain.gain);
+  lfo.start();
+}
 
 window.addEventListener('mousemove', (e) => {
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
