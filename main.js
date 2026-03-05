@@ -3,6 +3,7 @@ import * as THREE from 'three';
 // ─── Config ───
 const PARTICLE_COUNT = 12000;
 const FIELD_SIZE = 8;
+const TRAIL_LENGTH = 80;
 
 // ─── Time-of-day color palette ───
 function getTimeColors() {
@@ -82,7 +83,7 @@ function revealContent() {
   if (!verseShown) {
     // First time: ghostly Arabic glimpse, then English
     verseShown = true;
-    // Brief glimpse of Arabic - barely visible
+    // Brief glimpse of Arabic - barely visible, blurred
     verse.classList.add('glimpse');
     setTimeout(() => {
       verse.classList.remove('glimpse');
@@ -189,6 +190,80 @@ window.addEventListener('deviceorientation', (e) => {
   }
 }, { passive: true });
 
+// ─── Cursor Trail ───
+const trailPositions = new Float32Array(TRAIL_LENGTH * 3);
+const trailAlphas = new Float32Array(TRAIL_LENGTH);
+const trailGeometry = new THREE.BufferGeometry();
+trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+trailGeometry.setAttribute('alpha', new THREE.BufferAttribute(trailAlphas, 1));
+
+const trailMaterial = new THREE.ShaderMaterial({
+  vertexShader: /* glsl */ `
+    uniform float uTime;
+    attribute float alpha;
+    varying float vAlpha;
+    void main() {
+      vAlpha = alpha;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      // Jiggly bubble wobble - each point gets unique phase from position
+      float phase = position.x * 13.7 + position.y * 7.3;
+      float wobbleX = sin(uTime * 3.0 + phase) * 0.012 * alpha;
+      float wobbleY = cos(uTime * 2.5 + phase * 1.3) * 0.012 * alpha;
+      mvPosition.xy += vec2(wobbleX, wobbleY);
+      gl_Position = projectionMatrix * mvPosition;
+      // Gentle size pulse like a breathing bubble
+      float sizePulse = 1.0 + sin(uTime * 2.0 + phase * 0.7) * 0.25;
+      gl_PointSize = alpha * 1.35 * sizePulse * (200.0 / -mvPosition.z);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uTrailColor;
+    varying float vAlpha;
+    void main() {
+      vec2 center = gl_PointCoord - 0.5;
+      float dist = length(center);
+      // Soft gaussian glow - gentle touch of hidayah
+      float a = exp(-dist * dist * 12.0) * vAlpha * 0.35;
+      gl_FragColor = vec4(uTrailColor, a);
+    }
+  `,
+  uniforms: {
+    uTrailColor: { value: timeColors.warm },
+    uTime: { value: 0 },
+  },
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+
+const trailPoints = new THREE.Points(trailGeometry, trailMaterial);
+scene.add(trailPoints);
+
+let trailIndex = 0;
+const mouseWorld3D = new THREE.Vector3();
+
+function updateTrail() {
+  // Convert smooth mouse to world position
+  mouseWorld3D.set(mouseSmooth.x * 3.0, mouseSmooth.y * 3.0, 0);
+
+  const i3 = trailIndex * 3;
+  trailPositions[i3] = mouseWorld3D.x;
+  trailPositions[i3 + 1] = mouseWorld3D.y;
+  trailPositions[i3 + 2] = mouseWorld3D.z;
+
+  // Update all alphas - fade from newest to oldest
+  for (let i = 0; i < TRAIL_LENGTH; i++) {
+    const age = (trailIndex - i + TRAIL_LENGTH) % TRAIL_LENGTH;
+    const life = Math.max(0, 1 - age / TRAIL_LENGTH);
+    trailAlphas[i] = life * life * (mouseActive ? 1 : 0);
+  }
+
+  trailIndex = (trailIndex + 1) % TRAIL_LENGTH;
+  trailGeometry.attributes.position.needsUpdate = true;
+  trailGeometry.attributes.alpha.needsUpdate = true;
+}
+
+// ─── Input handlers ───
 window.addEventListener('mousemove', (e) => {
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -479,6 +554,9 @@ function animate() {
   mouseSmooth.x += (mouse.x - mouseSmooth.x) * 0.05;
   mouseSmooth.y += (mouse.y - mouseSmooth.y) * 0.05;
 
+  // Update trail
+  updateTrail();
+
   // Update uniforms
   material.uniforms.uTime.value = elapsed;
   material.uniforms.uMouse.value.copy(mouseSmooth);
@@ -486,6 +564,7 @@ function animate() {
   const targetReveal = revealed ? 1 : 0;
   material.uniforms.uReveal.value += (targetReveal - material.uniforms.uReveal.value) * 0.03;
   glowMaterial.uniforms.uTime.value = elapsed;
+  trailMaterial.uniforms.uTime.value = elapsed;
 
   // Camera: base sway + parallax from mouse/gyro
   const swayX = Math.sin(elapsed * 0.1) * 0.3;
