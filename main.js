@@ -177,6 +177,18 @@ function initAudio() {
   lfo.start();
 }
 
+// ─── Gyroscope / Device Orientation ───
+const deviceTilt = new THREE.Vector2(0, 0);
+let hasGyro = false;
+
+window.addEventListener('deviceorientation', (e) => {
+  if (e.gamma !== null && e.beta !== null) {
+    hasGyro = true;
+    deviceTilt.x = (e.gamma / 45) * 0.5;  // left/right tilt, clamped
+    deviceTilt.y = ((e.beta - 45) / 45) * 0.5; // forward/back tilt
+  }
+}, { passive: true });
+
 window.addEventListener('mousemove', (e) => {
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -457,6 +469,7 @@ scene.add(glowMesh);
 
 // ─── Animation loop ───
 const clock = new THREE.Clock();
+const baseCamPos = new THREE.Vector3(0, 0, 5);
 
 function animate() {
   requestAnimationFrame(animate);
@@ -474,9 +487,24 @@ function animate() {
   material.uniforms.uReveal.value += (targetReveal - material.uniforms.uReveal.value) * 0.03;
   glowMaterial.uniforms.uTime.value = elapsed;
 
-  // Gentle camera sway
-  camera.position.x = Math.sin(elapsed * 0.1) * 0.3;
-  camera.position.y = Math.cos(elapsed * 0.12) * 0.2;
+  // Camera: base sway + parallax from mouse/gyro
+  const swayX = Math.sin(elapsed * 0.1) * 0.3;
+  const swayY = Math.cos(elapsed * 0.12) * 0.2;
+
+  // Gyro on mobile, mouse parallax on desktop
+  let parallaxX = 0;
+  let parallaxY = 0;
+  if (hasGyro) {
+    parallaxX = deviceTilt.x * 0.8;
+    parallaxY = deviceTilt.y * 0.5;
+  } else {
+    parallaxX = mouseSmooth.x * 0.4;
+    parallaxY = mouseSmooth.y * 0.25;
+  }
+
+  camera.position.x = swayX + parallaxX;
+  camera.position.y = swayY + parallaxY;
+  camera.position.z = baseCamPos.z;
   camera.lookAt(0, 0, 0);
 
   renderer.render(scene, camera);
